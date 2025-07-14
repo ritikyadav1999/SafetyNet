@@ -1,18 +1,21 @@
 const SOSAlert = require("../models/SOSAlert");
 const User = require("../models/User");
+const { getIO } = require("../config/socket");
 
 // 1. Trigger an SOS
 exports.triggerSOS = async (req, res) => {
   try {
-    const { lat, lng, message="Please help me" } = req.body;
+    const { lat, lng, message = "Please help me" } = req.body;
 
     if (!lat || !lng) {
-      return res.status(400).json({ error: "Latitude and longitude are required" });
+      return res
+        .status(400)
+        .json({ error: "Latitude and longitude are required" });
     }
 
     const user = await User.findById(req.user.id);
 
-    if(!user.canSendSOS){
+    if (!user.canSendSOS) {
       return res.status(400).json({ error: "You can't send SOS right now" });
     }
 
@@ -35,14 +38,21 @@ exports.triggerSOS = async (req, res) => {
     user.canSendSOS = false;
     await user.save();
 
+    const io = getIO();
+
+    io.emit("new-sos", {
+      victimId: req.user.idd,
+      sosId: sos._id,
+      location: { lat, lng },
+      message
+    });
+
     res.status(201).json({ success: true, sos });
   } catch (error) {
     console.error("Error in triggerSOS:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
-
 
 // 2. Get nearby helpers (within 1km by default)
 exports.getNearbyHelpers = async (req, res) => {
@@ -74,8 +84,6 @@ exports.getNearbyHelpers = async (req, res) => {
   }
 };
 
-
-
 // 3. Accept to help with an SOS
 exports.acceptSOS = async (req, res) => {
   try {
@@ -84,28 +92,34 @@ exports.acceptSOS = async (req, res) => {
 
     const sos = await SOSAlert.findById(sosId);
     if (!sos || sos.status !== "active") {
-      return res.status(404).json({ error: "SOS not found or already resolved" });
+      return res
+        .status(404)
+        .json({ error: "SOS not found or already resolved" });
     }
 
     if (sos.responders.includes(userId)) {
-      return res.status(400).json({ error: "You have already accepted this SOS" });
+      return res
+        .status(400)
+        .json({ error: "You have already accepted this SOS" });
     }
 
-    if(sos.victim.toString() === userId){
+    if (sos.victim.toString() === userId) {
       return res.status(400).json({ error: "You can't accept your own SOS" });
     }
 
     sos.responders.push(userId);
     await sos.save();
 
-    res.status(200).json({ success: true, message: "You have been added as a responder", sos });
+    res.status(200).json({
+      success: true,
+      message: "You have been added as a responder",
+      sos,
+    });
   } catch (error) {
     console.error("Error in acceptSOS:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
-
 
 // 4. Resolve an SOS
 exports.resolveSOS = async (req, res) => {
@@ -122,14 +136,14 @@ exports.resolveSOS = async (req, res) => {
     sos.resolvedBy = userId;
     await sos.save();
 
-    res.status(200).json({ success: true, message: "SOS marked as resolved", sos });
+    res
+      .status(200)
+      .json({ success: true, message: "SOS marked as resolved", sos });
   } catch (error) {
     console.error("Error in resolveSOS:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
-
 
 // 5. Get all active SOS alerts
 exports.getActiveSOS = async (req, res) => {
@@ -146,22 +160,20 @@ exports.getActiveSOS = async (req, res) => {
   }
 };
 
-
 exports.getAllSOSAlerts = async (req, res) => {
-    try {
-      const sosList = await SOSAlert.find()
-        .populate("victim", "name email phone")
-        .populate("responders", "name email")
-        .sort({ createdAt: -1 });
-  
-      res.status(200).json({
-        success: true,
-        total: sosList.length,
-        sosAlerts: sosList,
-      });
-    } catch (error) {
-      console.error("Admin SOS Fetch Error:", error);
-      res.status(500).json({ success: false, message: "Server error" });
-    }
-  };
+  try {
+    const sosList = await SOSAlert.find()
+      .populate("victim", "name email phone")
+      .populate("responders", "name email")
+      .sort({ createdAt: -1 });
 
+    res.status(200).json({
+      success: true,
+      total: sosList.length,
+      sosAlerts: sosList,
+    });
+  } catch (error) {
+    console.error("Admin SOS Fetch Error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

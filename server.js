@@ -12,9 +12,17 @@ const zlib = require("zlib");
 require("dotenv").config();
 
 const app = express();
+const http = require("http");
+const { initSocket } = require("./config/socket");
+const server = http.createServer(app);
 
 // ✅ Connect to MongoDB
 connectDB();
+
+
+// Initialize Socket.IO
+initSocket(server);
+
 
 // ✅ Enable Brotli compression
 app.use(
@@ -43,10 +51,11 @@ app.use(limiter);
 // ✅ CORS Middleware (important to be early)
 app.use(
   cors({
-    origin: "http://localhost:4200", // Frontend URL
+    origin: "http://localhost:3000", // Frontend URL
     credentials: true, // Allow credentials (cookies)
   })
 );
+
 
 // ✅ JSON Parser and Cookie Parser
 app.use(express.json());
@@ -70,6 +79,6 @@ app.use(errorHandler);
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
